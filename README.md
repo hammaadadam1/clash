@@ -12,7 +12,7 @@ The results will be stored in `experiments/gaussian/results`. Running this line 
   
 ```
   mkdir output
-  sbatch tte.slurm
+  sbatch gaussian.slurm
   ```
  
 Finally, `experiments/gaussian/plot_gaussian.R` uses the generated results to create the plots from the Paper. Running this file interactively (through RStudio) will produce Figures 2, 3, S7, S8, and S9. 
