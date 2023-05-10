@@ -12,7 +12,6 @@ The results will be stored in `experiments/gaussian/results`. Running this line 
   
 ```
   mkdir output
-  mkdir results
   sbatch tte.slurm
   ```
  
@@ -28,7 +27,6 @@ The results will be stored in `experiments/tte/results`. Running this line of co
   
 ```
   mkdir output
-  mkdir results
   sbatch tte.slurm
   ```
  
