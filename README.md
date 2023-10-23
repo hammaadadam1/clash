@@ -1,6 +1,6 @@
 ## Causal Latent Analysis for Stopping Heterogeneously (CLASH)
 
-This repository contains replication code for the experiments described in *Should I Stop or Should I Go: Early Stopping with Heterogeneous Populations*. All experiments were run using R version 4.2.2.
+This repository contains replication code for the experiments described in *Should I Stop or Should I Go: Early Stopping with Heterogeneous Populations* (NeurIPS, 2023). All experiments were run using R version 4.2.2.
 
 ### Gaussian Outcomes
 
