@@ -6,7 +6,7 @@ usePackage("dplyr")
 ################################## Read Results ##############################################
 ##############################################################################################
 
-resfolder <- './results'
+resfolder <- './results_new'
 files <- list.files(resfolder)
 
 res1 <- read.csv(paste0(resfolder, '/', files[1]))
@@ -53,22 +53,27 @@ ggplot(plot_norm %>% filter(eff.cols==3,
                   linetype=dashed), alpha=0.2, 
               outline.type= "full") +
   geom_line(aes(y=stop75, col=type, linetype=dashed), linewidth=1) + 
-  geom_point(aes(y=stop75, col=type), size=4) + 
+  geom_point(aes(y=stop75, col=type, shape=type), size=4) + 
   theme_classic() + 
   theme(legend.title = element_blank()) + 
-  scale_fill_manual(values = c("unknown" = "#619CFF",
-                               "est" ="#F8766D",
-                               "subtle" ="#C77CFF",
-                               "known"="#00BA38"), 
+  scale_fill_manual(values = c("unknown" = "#56B4E9",
+                               "est" ="#D55E00",
+                               "subtle" ="#CC79A7",
+                               "known"="#009E73"), 
                     labels = c("Oracle","CLASH","SUBTLE", "Homogeneous")) + 
-  scale_color_manual(values = c("unknown" = "#619CFF",
-                                "est" ="#F8766D",
-                                "subtle" ="#C77CFF",
-                                "known"="#00BA38"), 
+  scale_color_manual(values = c("unknown" = "#56B4E9",
+                                "est" ="#D55E00",
+                                "subtle" ="#CC79A7",
+                                "known"="#009E73"), 
+                     labels = c("Oracle", "CLASH","SUBTLE", "Homogeneous")) +
+  scale_shape_manual(values = c("unknown"= 16,
+                                "est"=15, 
+                                "subtle"=17, 
+                                "known"=5), 
                      labels = c("Oracle", "CLASH","SUBTLE", "Homogeneous")) +
   xlab('Harmful Treatment Effect on Minority Group') + 
   ylab('Probability of Stopping Early (at any checkpoint)') + 
-  scale_linetype(guide = 'none') + 
+  scale_linetype(guide = 'none') +
   theme(legend.position = 'bottom', 
         text = element_text(size = 16), 
         strip.text.x = element_text(size = 18), 
@@ -78,6 +83,7 @@ ggplot(plot_norm %>% filter(eff.cols==3,
         legend.key.width= unit(1, 'cm'))  + 
   scale_x_continuous(breaks = seq(0,1,0.2)) + 
   scale_y_continuous(breaks = seq(0,1,0.1))
+ggsave('./figures/fig2.pdf',height=7.5, width=14)
 
 ############### Figure 3 #################################
 plot_improvement_subtle <- plot_norm %>% 
@@ -112,6 +118,7 @@ ggplot(plot_improvement_subtle %>% filter(effect_maj == -0.1,
   theme(text = element_text(size = 18), 
         axis.title.y = element_text(size = 14), 
         axis.text.y = element_text(size = 12))
+ggsave('./figures/fig3a.pdf',height=5.5, width=8)
 
 # Figure 3b
 ggplot(plot_improvement_subtle %>% filter(effect_maj == -0.1,
@@ -131,6 +138,95 @@ ggplot(plot_improvement_subtle %>% filter(effect_maj == -0.1,
   theme(text = element_text(size = 18), 
         axis.title.y = element_text(size = 14), 
         axis.text.y = element_text(size = 12))
+ggsave('./figures/fig3b.pdf',height=5.5, width=8)
+
+############### Figure S6 #################################
+
+# Figure S6a
+ggplot(plot_norm %>% filter(eff.cols==2, 
+                            ncolX == 5),
+       aes(x=effect)) + 
+  facet_grid(cols=vars(method),rows = vars(base)) + 
+  geom_ribbon(aes(ymin=stop75-1.96*sqrt(var75),
+                  ymax=stop75+1.96*sqrt(var75), 
+                  fill=type, 
+                  linetype=dashed), alpha=0.2, 
+              outline.type= "full") +
+  geom_line(aes(y=stop75, col=type, linetype=dashed), linewidth=1) + 
+  geom_point(aes(y=stop75, col=type, shape=type), size=4) + 
+  theme_classic() + 
+  theme(legend.title = element_blank()) + 
+  scale_fill_manual(values = c("unknown" = "#56B4E9",
+                               "est" ="#D55E00",
+                               "subtle" ="#CC79A7",
+                               "known"="#009E73"), 
+                    labels = c("Oracle","CLASH","SUBTLE", "Homogeneous")) + 
+  scale_color_manual(values = c("unknown" = "#56B4E9",
+                                "est" ="#D55E00",
+                                "subtle" ="#CC79A7",
+                                "known"="#009E73"), 
+                     labels = c("Oracle", "CLASH","SUBTLE", "Homogeneous")) +
+  scale_shape_manual(values = c("unknown"= 16,
+                                "est"=15, 
+                                "subtle"=17, 
+                                "known"=5), 
+                     labels = c("Oracle", "CLASH","SUBTLE", "Homogeneous")) +
+  xlab('Harmful Treatment Effect on Minority Group') + 
+  ylab('Probability of Stopping Early (at any checkpoint)') + 
+  scale_linetype(guide = 'none') + 
+  theme(legend.position = 'bottom', 
+        text = element_text(size = 16), 
+        strip.text.x = element_text(size = 18), 
+        legend.text = element_text(size = 18), 
+        axis.title.x = element_text(size = 18), 
+        axis.title.y = element_text(size = 18), 
+        legend.key.width= unit(1, 'cm'))  + 
+  scale_x_continuous(breaks = seq(0,1,0.2)) + 
+  scale_y_continuous(breaks = seq(0,1,0.1))
+ggsave('./figures/app/figs6a.pdf',height=7.5, width=14)
+
+# Figure S6b
+ggplot(plot_norm %>% filter(eff.cols==1, 
+                            ncolX == 5),
+       aes(x=effect)) + 
+  facet_grid(cols=vars(method),rows = vars(base)) + 
+  geom_ribbon(aes(ymin=stop75-1.96*sqrt(var75),
+                  ymax=stop75+1.96*sqrt(var75), 
+                  fill=type, 
+                  linetype=dashed), alpha=0.2, 
+              outline.type= "full") +
+  geom_line(aes(y=stop75, col=type, linetype=dashed), linewidth=1) + 
+  geom_point(aes(y=stop75, col=type, shape=type), size=4) + 
+  theme_classic() + 
+  theme(legend.title = element_blank()) + 
+  scale_fill_manual(values = c("unknown" = "#56B4E9",
+                               "est" ="#D55E00",
+                               "subtle" ="#CC79A7",
+                               "known"="#009E73"), 
+                    labels = c("Oracle","CLASH","SUBTLE", "Homogeneous")) + 
+  scale_color_manual(values = c("unknown" = "#56B4E9",
+                                "est" ="#D55E00",
+                                "subtle" ="#CC79A7",
+                                "known"="#009E73"), 
+                     labels = c("Oracle", "CLASH","SUBTLE", "Homogeneous")) +
+  scale_shape_manual(values = c("unknown"= 16,
+                                "est"=15, 
+                                "subtle"=17, 
+                                "known"=5), 
+                     labels = c("Oracle", "CLASH","SUBTLE", "Homogeneous")) +
+  xlab('Harmful Treatment Effect on Minority Group') + 
+  ylab('Probability of Stopping Early (at any checkpoint)') + 
+  scale_linetype(guide = 'none') + 
+  theme(legend.position = 'bottom', 
+        text = element_text(size = 16), 
+        strip.text.x = element_text(size = 18), 
+        legend.text = element_text(size = 18), 
+        axis.title.x = element_text(size = 18), 
+        axis.title.y = element_text(size = 18), 
+        legend.key.width= unit(1, 'cm'))  + 
+  scale_x_continuous(breaks = seq(0,1,0.2)) + 
+  scale_y_continuous(breaks = seq(0,1,0.1))
+ggsave('./figures/app/figs6b.pdf',height=7.5, width=14)
 
 ############### Figure S7 #################################
 # Figure S7a
@@ -151,6 +247,7 @@ ggplot(plot_improvement_subtle %>% filter(effect_maj == 0,
   theme(text = element_text(size = 18), 
         axis.title.y = element_text(size = 14), 
         axis.text.y = element_text(size = 12))
+ggsave('./figures/app/figs7a.pdf',height=5.5, width=8)
 
 # Figure S7b
 ggplot(plot_improvement_subtle %>% filter(effect_maj == 0,
@@ -170,6 +267,7 @@ ggplot(plot_improvement_subtle %>% filter(effect_maj == 0,
   theme(text = element_text(size = 18), 
         axis.title.y = element_text(size = 14), 
         axis.text.y = element_text(size = 12))
+ggsave('./figures/app/figs7b.pdf',height=5.5, width=8)
 
 ############### Figure S8 #################################
 plot_improvement_homo <- plot_norm %>% 
@@ -204,6 +302,7 @@ ggplot(plot_improvement_homo %>% filter(effect_maj == -0.1,
   theme(text = element_text(size = 18), 
         axis.title.y = element_text(size = 14), 
         axis.text.y = element_text(size = 12))
+ggsave('./figures/app/figs8a.pdf',height=5.5, width=8)
 
 # Figure S8b
 ggplot(plot_improvement_homo %>% filter(effect_maj == -0.1,
@@ -223,6 +322,7 @@ ggplot(plot_improvement_homo %>% filter(effect_maj == -0.1,
   theme(text = element_text(size = 18), 
         axis.title.y = element_text(size = 14), 
         axis.text.y = element_text(size = 12))
+ggsave('./figures/app/figs8b.pdf',height=5.5, width=8)
 
 ############### Figure S9 #################################
 
@@ -244,6 +344,7 @@ ggplot(plot_improvement_homo %>% filter(effect_maj == 0,
   theme(text = element_text(size = 18), 
         axis.title.y = element_text(size = 14), 
         axis.text.y = element_text(size = 12))
+ggsave('./figures/app/figs9a.pdf',height=5.5, width=8)
 
 # Figure S9b
 ggplot(plot_improvement_homo %>% filter(effect_maj == 0,
@@ -263,6 +364,6 @@ ggplot(plot_improvement_homo %>% filter(effect_maj == 0,
   theme(text = element_text(size = 18), 
         axis.title.y = element_text(size = 14), 
         axis.text.y = element_text(size = 12))
-
+ggsave('./figures/app/figs9b.pdf',height=5.5, width=8)
 
 

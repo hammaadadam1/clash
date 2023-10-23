@@ -5,6 +5,7 @@ args <- commandArgs(trailingOnly=TRUE)
 seed <- as.integer(args[1])
 resfolder <- args[2]
 resname <- paste0(resfolder, '/sim', seed, '.csv')
+nthreads <- 2
 
 ##############################################################################################
 ####################################### Settings #############################################
@@ -19,6 +20,7 @@ knowntypes <- c("known", "unknown", "est") # known: oracle, unknown: homogeneous
 ncolXs <- c(3,5,10)                        # Number of binary covariates
 eff.columns <- c(1,2,3)                    # Number of covariates that drive heterogeneity
                                            # (1: 50% minority group, 2: 25% minority group, 3: 11% minority group)
+
 delta.eff <- 0.1                           # Choice of delta (CLASH hyperparameter)
 cv <- 5                                    # k for k-fold cross validation
 
@@ -80,32 +82,28 @@ for(effect in effect_sizes){
         
         # Run CLASH, Homogeneous, and Oracle to determine stopping time
         for(knowntype in knowntypes){
-          # First compute weights
+          # First compute weights. 
+          # Weights are a matrix: each column contains the weights estimated at one interim check
+          
           # For Oracle, weights are true group indicator
           if(knowntype=="known"){
-            w_final <- data$group
+            w_final <- matrix(rep(data$group, length(interims)), ncol=length(interims))
             h1 <- max(effect, delta.eff)
           } 
           # For Homogeneous, weights are all 1
           else if(knowntype=="unknown"){ 
-            w_final <- rep(1, nrow(data))
+            w_final <- matrix(1, nrow=nrow(data), ncol=length(interims))
             h1 <- sum(data$group) / nrow(data) * effect
             h1 <- max(h1, delta.eff)
           }
           # For CLASH, weights are estimated by causal forest with CV
           else if(knowntype=="est"){
-            w_final <- rep(1, nrow(data))
+            w_final <- matrix(0, nrow=nrow(data), ncol=length(interims))
             for(check in 1:length(interims)){
-              if(check > 1){
-                idx_to_update <- (interims[check-1] + 1):interims[check]
-              } else{
-                idx_to_update <- 1:interims[check]
-              }
-              
               w <- estGWeightedCV(data_raw, cv, delta.eff, interims[check],
-                                  'cf', args_normal, NULL)
+                                  'cf', args_normal, nthreads = nthreads)
               w <- w[seq(1, length(w), 2)]
-              w_final[idx_to_update] <- w[idx_to_update]
+              w_final[1:interims[check], check] <- w
             }
             
             pg <- sum(data$group) / nrow(data)
@@ -125,7 +123,7 @@ for(effect in effect_sizes){
             if(knowntype == 'est' & method=='mixsprt'){
               setting <- cbind('subtle', ncolX, effect, maj_effect, eff.cols, method, seed)
               stop_time <- subtle(data_raw, interims, subtle_init_batch, 
-                                  subtle_batch_size, subtle_tausq, args_normal, NULL) 
+                                  subtle_batch_size, subtle_tausq, args_normal,nthreads = nthreads) 
               results[i,] <- c(setting, stop_time)
               i <- i+1
             }

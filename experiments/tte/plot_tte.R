@@ -52,12 +52,12 @@ plot_tte$method <- factor(plot_tte$method, levels = c('OF', 'Pocock'))
 levels(plot_tte$method) <- c("O'Brien-Fleming", "Pocock")
 plot_tte$type <- factor(plot_tte$type, levels = c('known', 'est', 'unknown'))
 
-############### Figure S10 #################################
+############### Figure S16 #################################
 
 ggplot(plot_tte %>% mutate(size = paste0("Minority Group Size: ",round(100/(2*eff.cols),0), '%')) %>% 
          filter(eff.cols %in% c(1,2),
                 ncolX == 5,
-                method=="O'Brien-Fleming"),
+                method=='O\'Brien-Fleming'),
        aes(x=HR)) + 
   facet_grid(cols=vars(size),rows = vars(base)) + 
   geom_ribbon(aes(ymin=stop3-1.96*sqrt(var3),
@@ -66,16 +66,20 @@ ggplot(plot_tte %>% mutate(size = paste0("Minority Group Size: ",round(100/(2*ef
                   linetype=dashed), alpha=0.2, 
               outline.type= "full") +
   geom_line(aes(y=stop3, col=type,linetype=dashed)) + 
-  geom_point(aes(y=stop3, col=type)) + 
+  geom_point(aes(y=stop3, col=type, shape=type), size=4) + 
   theme_classic() + 
   theme(legend.title = element_blank()) + 
-  scale_fill_manual(values = c("unknown" = "#619CFF",
-                               "est" ="#F8766D",
-                               "known"="#00BA38"), 
+  scale_fill_manual(values = c("unknown" = "#56B4E9",
+                               "est" ="#D55E00",
+                               "known"="#009E73"), 
                     labels = c("Oracle","CLASH", "Homogeneous")) + 
-  scale_color_manual(values = c("unknown" = "#619CFF",
-                                "est" ="#F8766D",
-                                "known"="#00BA38"), 
+  scale_color_manual(values = c("unknown" = "#56B4E9",
+                                "est" ="#D55E00",
+                                "known"="#009E73"), 
+                     labels = c("Oracle", "CLASH", "Homogeneous")) +
+  scale_shape_manual(values = c("unknown"= 16,
+                                "est"=15, 
+                                "known"=5), 
                      labels = c("Oracle", "CLASH", "Homogeneous")) +
   xlab('Hazard Ratio for Minority Group') + 
   ylab('Probability of Stopping Early (at any interim checkpoint)') + 
@@ -83,8 +87,9 @@ ggplot(plot_tte %>% mutate(size = paste0("Minority Group Size: ",round(100/(2*ef
   theme(legend.position = 'bottom', text = element_text(size = 16))  + 
   scale_x_continuous(breaks = seq(0,1,0.2)) + 
   scale_y_continuous(breaks = seq(0,1,0.1))
+ggsave('./figures/fig_tte.pdf',height=7.5, width=13)
 
-############### Figure S11 #################################
+############### Figure S17 #################################
 
 plot_improvement <- plot_tte %>% 
   pivot_longer(cols = -c(1:6,13), 
@@ -100,11 +105,11 @@ plot_improvement <- plot_tte %>%
          ncolX = paste0(ncolX, " covariates"),
          ncolX = factor(ncolX, levels = paste0(c(3,5,10), " covariates")))
 
-# Figure S11a
+# Figure S17a
 ggplot(plot_improvement %>% filter(base == 'Treatment Benefits Majority',
                                    eff.cols==2, 
                                    method=="O'Brien-Fleming",
-                                   ncolX %in% paste0(c(3, 5,10)," covariates")),
+                                   ncolX %in% paste0(c(3,5,10)," covariates")),
        aes(x=HR)) + 
   facet_grid(rows=vars(ncolX), cols = vars(time)) + 
   geom_bar(aes(y = improvement),stat='identity', fill='lightcyan2') + 
@@ -118,8 +123,9 @@ ggplot(plot_improvement %>% filter(base == 'Treatment Benefits Majority',
   theme(text = element_text(size = 18), 
         axis.title.y = element_text(size = 14), 
         axis.text.y = element_text(size = 12))
+ggsave('./figures/fig_tte_s1a.pdf',height=5.5, width=8)
 
-# Figure S11b
+# Figure S17b
 ggplot(plot_improvement %>% filter(base == 'Treatment Benefits Majority',
                                    eff.cols==1, 
                                    method=="O'Brien-Fleming",
@@ -137,10 +143,11 @@ ggplot(plot_improvement %>% filter(base == 'Treatment Benefits Majority',
   theme(text = element_text(size = 18), 
         axis.title.y = element_text(size = 14), 
         axis.text.y = element_text(size = 12))
+ggsave('./figures/fig_tte_s1b.pdf',height=5.5, width=8)
 
-############### Figure S12 #################################
+############### Figure S18 #################################
 
-# Figure S12a
+# Figure S18a
 ggplot(plot_improvement %>% filter(base == 'Treatment Has No Effect on Majority',
                                    eff.cols==2, 
                                    method=="O'Brien-Fleming",
@@ -158,8 +165,9 @@ ggplot(plot_improvement %>% filter(base == 'Treatment Has No Effect on Majority'
   theme(text = element_text(size = 18), 
         axis.title.y = element_text(size = 14), 
         axis.text.y = element_text(size = 12))
+ggsave('./figures/fig_tte_s2a.pdf',height=5.5, width=8)
 
-# Figure S12b
+# Figure S18b
 ggplot(plot_improvement %>% filter(base == 'Treatment Has No Effect on Majority',
                                    eff.cols==1, 
                                    method=="O'Brien-Fleming",
@@ -177,4 +185,5 @@ ggplot(plot_improvement %>% filter(base == 'Treatment Has No Effect on Majority'
   theme(text = element_text(size = 18), 
         axis.title.y = element_text(size = 14), 
         axis.text.y = element_text(size = 12))
+ggsave('./figures/fig_tte_s2b.pdf',height=5.5, width=8)
 

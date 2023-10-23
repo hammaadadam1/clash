@@ -19,6 +19,7 @@ maj_lambda1s <- c(0.1, 0.12)                     # Survival function lambda1 for
 knowntypes <- c("known", "unknown", "est")       # known: oracle, unknown: homogeneous baseline, est: CLASH
 ncolXs <- c(3,5,10)        # Number of binary covariates
 eff.columns <- c(0,1,2)    # Number of covariates that drive heterogeneity (0: 100% group, 1: 50% minority group, 2: 25% minority group)
+
 delta.eff <- 0.05          # Choice of delta (CLASH hyperparameter)
 cv <- 5                    # k for k-fold cross validation
 

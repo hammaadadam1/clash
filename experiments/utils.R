@@ -10,6 +10,7 @@ usePackage('grf')
 usePackage('ranger')
 usePackage('glmnet')
 usePackage('survival')
+usePackage('Hmisc')
 
 # Simulate data with specified arguments for Gaussian outcomes
 simDataXb <- function(args){
@@ -45,6 +46,89 @@ simDataXb <- function(args){
   df <- as.data.frame(cbind(rep(seq(1,N/2,1), each=2),seq(1,N,1), W, G, X, y))
   names(df) <- c("time","id", "treatment", "group", paste0("X", seq(1,ncolX)),"outcome")
   
+  return(df)
+}
+
+# Simulate Gaussian data with stochastic groups
+simDataStochasticG <- function(args){
+  
+  set.seed(args$seed)
+  min.size <- args$min.size
+  N <- floor(args$N/2)*2
+  W <- rep(c(0,1), N / 2)
+  ncolX <- args$ncolX
+  
+  X <- matrix(rbinom(N/2*ncolX, 1, 0.5), nrow=N/2)
+  if(args$eff.cols > 1){
+    tau <- apply(X[,1:args$eff.cols],1,prod)
+  } else if(args$eff.cols==1){
+    tau <- X[,1]
+  } else if(args$eff.cols==0){
+    tau <- rep(1, nrow(X))
+  }
+  G <- (tau > 0)*rbinom(nrow(X),1,args$p)
+  
+  X <- X[rep(seq(1,nrow(X)),each=2),]
+  G <- G[rep(seq(1,length(G)),each=2)]
+  
+  y <- rnorm(N, args$base.mean, sqrt(args$base.var)) + 
+      args$effect.maj*W*(1-G) + args$effect.min*W*G
+  
+  df <- as.data.frame(cbind(rep(seq(1,N/2,1), each=2),seq(1,N,1), W, G, X, y))
+  names(df) <- c("time","id", "treatment", "group", paste0("X", seq(1,ncolX)),"outcome")
+  
+  return(df)
+}
+
+# Simulate Gaussian data with more than two groups
+simDataMultiGroup <- function(args){
+  set.seed(args$seed)
+  
+  N <- floor(args$N/2)*2
+  W <- rep(c(0,1), N / 2)
+  ncolX <- args$ncolX
+  
+  if(args$total.groups==3){
+    stopifnot(ncolX >1)
+    
+    X <- matrix(rbinom(N/2*ncolX, 1, 0.5), nrow=N/2)
+    X <- X[rep(seq(1,nrow(X)),each=2),]
+    
+    g1 <- apply(X[,1:args$eff.cols],1,prod)
+    g2 <- apply(X[,1:(args$eff.cols-1)],1,prod)
+    
+    G <- 0 + 1*(g1==1)*(g2==1) + 2*(g1==0)*(g2==1)
+    
+    y <- rnorm(N, args$base.mean, sqrt(args$base.var)) + 
+      args$effect.maj*W*(G==0) + args$effect.min*W*(G==1) + 
+      args$harm.ratio*args$effect.min*W*(G==2)
+    
+    df <- as.data.frame(cbind(rep(seq(1,N/2,1), each=2),seq(1,N,1), W, G, X, y))
+    names(df) <- c("time","id", "treatment", "group", paste0("X", seq(1,ncolX)),"outcome")
+  }
+  
+  if(args$total.groups==4){
+    stopifnot(ncolX > 1)
+    
+    X <- matrix(rbinom(N/2*ncolX, 1, 0.5), nrow=N/2)
+    X <- X[rep(seq(1,nrow(X)),each=2),]
+    
+    hg1 <- X[,1]*X[,2]
+    hg2 <- (1-hg1)*X[,1]
+    
+    bg1 <- 1*((X[,1]+X[,2])==0)
+    bg2 <- (1-hg1)*(1-hg2)*(1-bg1)*X[,2]
+    
+    G <- 1*hg1 + 2*hg2 -1*bg1 - 2*bg2
+
+    y <- rnorm(N, args$base.mean, sqrt(args$base.var)) + 
+          args$effect.maj*W*(G==-1) + args$harm.ratio*args$effect.maj*W*(G==-2) + 
+          args$effect.min*W*(G==1)  + args$harm.ratio*args$effect.min*W*(G==2)
+    
+    df <- as.data.frame(cbind(rep(seq(1,N/2,1), each=2),seq(1,N,1), W, G, X, y))
+    names(df) <- c("time","id", "treatment", "group", paste0("X", seq(1,ncolX)),"outcome")
+  }
+    
   return(df)
 }
 
@@ -123,13 +207,14 @@ estGWeightedCV <- function(df, cv, cutoff, est_time, method, sim_args, nthreads)
     train_ids <- which(folds!=f)
     pred_ids <- which(folds==f)
     X <- df[train_ids,] %>% select(paste0("X", seq(1,ncolX))) %>% as.matrix()
+    
     # Train causal forest on train fold
     cf <- causal_forest(X=X, 
-                         Y=df$outcome[train_ids],
-                         W=df$treatment[train_ids],
-                         W.hat = rep(0.5, nrow(X)),
-                         num.trees = 2000, 
-                         num.threads = nthreads)
+                        Y=df$outcome[train_ids],
+                        W=df$treatment[train_ids],
+                        W.hat = rep(0.5, nrow(X)),
+                        num.trees = 2000, 
+                        num.threads = nthreads)
     
     Xn <- df[pred_ids,] %>% select(paste0("X", seq(1,ncolX))) %>% as.matrix()
     
@@ -137,6 +222,39 @@ estGWeightedCV <- function(df, cv, cutoff, est_time, method, sim_args, nthreads)
     pred <- predict(cf, Xn, estimate.variance = TRUE, num.threads = nthreads)
     
     # Compute CLASH weights
+    w[pred_ids] <- 1 - pnorm((cutoff-pred$predictions) / sqrt(pred$variance.estimates))
+  }
+  return(w)
+}
+
+# Estimate CLASH weights with cross validation for TTE data
+estWTTE <- function(df, cutoff, est_time, nfolds, sim_args, nthreads){
+  
+  ncolX <- sim_args$ncolX
+  
+  df_est <- df[est_time > df$accrual,]
+  df_est$outcome <- pmin(df_est$outcome, est_time-df_est$accrual)
+  df_est$noncensored <- df_est$noncensored * (df_est$outcome < est_time-df_est$accrual)
+  
+  folds <- sample(cut(seq(1,nrow(df_est)),breaks=nfolds,labels=FALSE))
+  
+  w <- rep(NA, nrow(df_est))
+  
+  for(f in 1:nfolds){
+    train_ids <- which(folds!=f)
+    pred_ids <- which(folds==f)
+    X <- df_est[train_ids,] %>% select(paste0("X", seq(1,ncolX))) %>% as.matrix()
+    csf <- causal_survival_forest(X=X, 
+                                  Y=df_est$outcome[train_ids],
+                                  W=df_est$treatment[train_ids],
+                                  D=df_est$noncensored[train_ids],
+                                  W.hat = rep(0.5, nrow(X)), 
+                                  horizon = est_time-6, # heuristic to stop instability
+                                  target = "RMST", 
+                                  num.threads = nthreads)
+    
+    Xn <- df_est[pred_ids,] %>% select(paste0("X", seq(1,ncolX))) %>% as.matrix()
+    pred <- predict(csf, Xn, estimate.variance = TRUE, num.threads = nthreads)
     w[pred_ids] <- 1 - pnorm((cutoff-pred$predictions) / sqrt(pred$variance.estimates))
   }
   return(w)
@@ -169,147 +287,167 @@ stopping_time <- function(data, weights, method, method_params){
   return(st)
 }
 
-# Wald's SPRT with Gaussian outcomes
+# Weighted SPRT with Gaussian outcomes
 wsprt <- function(df, weights, interims, h0, h1, sigmasq, sim_args){
-  if(sim_args$distr=='normal'){
-    sprt_df <- df %>% 
-      mutate(w = weights, 
-             llh0 = dnorm(y, mean = h0, sd = sqrt(2*sigmasq),log=TRUE), 
-             llh1 = dnorm(y, mean = h1, sd = sqrt(2*sigmasq),log=TRUE), 
-             llr = w*(llh1 - llh0), 
-             llr = cumsum(llr))
+  # weights should be a matrix, n x length(interims)
+  llr_bound <- 2.995732
+  for(check in 1:length(interims)){
+    check_time <- interims[check]
+    w <- weights[1:check_time, check]
+    y <- df$y[1:check_time]
+    
+    llh0 <- dnorm(y, mean = h0, sd = sqrt(2*sigmasq),log=TRUE) 
+    llh1 <- dnorm(y, mean = h1, sd = sqrt(2*sigmasq),log=TRUE)
+    llr = sum(w*(llh1 - llh0))
+    
+    if(llr > llr_bound){
+      if(h1 > h0){
+        return(cbind("Increase", check_time))
+      } else{
+        return(cbind("Decrease", check_time))
+      }
+    }
   }
-  llr_bound <- 2.995732 #waldBoundary(type1 = sim_args$alpha, type2 = 1-sim_args$beta)
-  
-  max_time <- max(sprt_df$time)
-  sprt_calc <- sprt_df %>% filter(time %in% interims) %>%
-    mutate(decision = 1*((llr <= llr_bound))) %>%
-    filter(decision == 0)
-  
-  stop_time <- ifelse(nrow(sprt_calc)==0, max(sprt_df$time), sprt_calc$time[1])
-  stop_type <- ifelse(nrow(sprt_calc)==0, "None", 
-                      ifelse(h1 > h0, "Increase", "Decrease"))
-  return(cbind(stop_type, stop_time))
+  return(cbind("None", max(df$time)))
 }
 
-# maxSPRT (with weights)
+# Weighted MaxSPRT with Gaussian outcomes
 wmaxsprt <- function(df, weights, interims, h0, sigmasq, llr_bound, sim_args){
   
-  if(sim_args$distr=='normal'){
-    sprt_df <- df %>%
-      mutate(w = weights, 
-             wy = w*y, 
-             wymean = cumsum(wy) / cumsum(w), 
-             llr = (wymean/(4*sigmasq))*(2*cumsum(wy) - 
-                                           wymean*cumsum(w)))
+  for(check in 1:length(interims)){
+    check_time <- interims[check]
+    w <- weights[1:check_time, check]
+    y <- df$y[1:check_time]
+    
+    wy = w*y
+    wymean = sum(wy) / sum(w)
+    llr = (wymean/(4*sigmasq))*(2*sum(wy) - 
+                                  wymean*sum(w))
+    
+    if(llr > llr_bound){
+      if(wymean > h0){
+        return(cbind("Increase", check_time))
+      }
+    }
   }
-  
-  max_time <- max(sprt_df$time)
-  sprt_calc <- sprt_df %>% filter(time %in% interims) %>%
-    mutate(decision = 1*(llr <= llr_bound)) %>%
-    filter(decision == 0, ymean > 0)
-  
-  stop_time <- ifelse(nrow(sprt_calc)==0, max(sprt_df$time), sprt_calc$time[1])
-  stop_ymean <- ifelse(nrow(sprt_calc)==0, h0, 
-                       sprt_calc$ymean[1])
-  stop_type <- ifelse(stop_ymean==h0, "None", 
-                      ifelse(stop_ymean > h0, "Increase", "Decrease"))
-  return(cbind(stop_type, stop_time))
+  return(cbind("None", max(df$time)))
 }
 
-# Frequentist tests (with weights): supports Pocock and OBF
-wfrequentistStop <- function(df, weights, interims, sigmasq, method, sim_args){
-  if(sim_args$distr=='normal'){
-    sprt_df <- df %>%  
-      mutate(w = weights,# / sum(weights), 
-             w2 = w^2,
-             wy = w*y, 
-             wysum = cumsum(wy),
-             zscore = cumsum(wy)/ sqrt(2*sigmasq*cumsum(w2)))
-    
-    max_time <- max(sprt_df$time)
-    
-    sprt_df <- sprt_df %>% filter(time %in% c(interims, max_time))
-    k = length(interims) + 1
-    
-    sprt_df$zbound <- gsDesign(k = k, test.type = 1, 
-                               alpha = sim_args$alpha,
-                               sfu = method)$upper$bound
-    
-    sprt_calc <- sprt_df %>%
-                  mutate(decision = 1*(zscore <= zbound)) %>%
-                    filter(decision == 0, time %in% interims)
-    
-    stop_time <- ifelse(nrow(sprt_calc)==0, max_time, sprt_calc$time[1])
-    stop_type <- ifelse(nrow(sprt_calc)==0, "None", "Increase")
-    # return(sprt_calc)
-    return(cbind(stop_type, stop_time))
-  }
-}
-
-# mSPRT (with weights), based on Johari et al (2017)
+# Weighted MixtureSPRT (mSPRT) with Gaussian outcomes. Based on Johari et al (2017)
 wmixsprt <- function(df, weights, interims, h0, tausq, sigmasq, sim_args){
-  if(sim_args$distr == 'normal'){
-    sprt_df <- df %>%
-                mutate(w = weights, 
-                       wy = w*y, 
-                       wsum = cumsum(w),
-                       wymean = cumsum(wy) / cumsum(w))
-    
-    sprt_df$mult1 <- 2*sigmasq / (2*sigmasq + sprt_df$wsum*tausq)
-    sprt_df$exp1 <- sprt_df$wsum^2 * tausq * (sprt_df$wymean - h0)^2 / (4*sigmasq*(2*sigmasq + sprt_df$wsum*tausq))
-    
-    sprt_df$llr <- 0.5*log(sprt_df$mult1) + sprt_df$exp1
-  }
   llr_bound <- -log(sim_args$alpha)
-  max_time <- max(sprt_df$time)
-  
-  sprt_calc <- sprt_df %>% filter(time %in% interims) %>%
-    mutate(decision = 1*((llr <= llr_bound))) %>%
-    filter(decision == 0)
-  
-  stop_time <- ifelse(nrow(sprt_calc)==0, max_time, sprt_calc$time[1])
-  stop_type <- ifelse(nrow(sprt_calc)==0, "None", 
-                      ifelse(sprt_calc$wymean[1] > 0, "Increase", "Decrease"))
-  return(cbind(stop_type, stop_time))
+  for(check in 1:length(interims)){
+    check_time <- interims[check]
+    w <- weights[1:check_time, check]
+    y <- df$y[1:check_time]
+    
+    wy <- w*y 
+    wsum <- sum(w)
+    wymean <- sum(wy) / sum(w)
+    
+    mult1 <- 2*sigmasq / (2*sigmasq + wsum*tausq)
+    exp1 <- wsum^2 * tausq * (wymean - h0)^2 / (4*sigmasq*(2*sigmasq + wsum*tausq))
+    llr <- 0.5*log(mult1) + exp1
+    
+    if(llr > llr_bound){
+      if(wymean > h0){
+        return(cbind("Increase", check_time))
+      }
+    }
+  }
+  return(cbind("None", max(df$time)))
 }
 
-# Bayesian estimation-based test for early stopping
-bayesian <- function(df, weights, interims, h0, tausq, sigmasq, loss_bound, sim_args){
-  if(sim_args$distr == 'normal'){
-    sprt_df <- df %>% 
-                mutate(w = weights, 
-                       wy = w*y, 
-                       wsum = cumsum(w),
-                       wymean = cumsum(wy) / cumsum(w))
-    
-    sprt_df$post_mean <- (h0*2*sigmasq + sprt_df$wsum*tausq*sprt_df$wymean) / (sprt_df$wsum*tausq + 2*sigmasq)
-    sprt_df$post_var <- (2*sigmasq*tausq)/(sprt_df$wsum*tausq + 2*sigmasq)
-    
-    sprt_df$loss1 <- bayesloss(sprt_df$post_mean, sqrt(sprt_df$post_var))
-    sprt_df$loss2 <- bayesloss(-sprt_df$post_mean, sqrt(sprt_df$post_var))
-    
-    sprt_df$loss <- sprt_df$loss1
+# Weighted group-sequential tests with Gaussian outcomes and known variance. 
+# Supports O'Brien-Fleming and Pocock
+wfrequentistStop <- function(df, weights, interims, sigmasq, method, sim_args){
+  # weights should be a matrix, n x length(interims)
+  k = length(interims) + 1
+  zbound <- gsDesign(k = k, test.type = 1, 
+                             alpha = sim_args$alpha,
+                             sfu = method)$upper$bound
+  
+  for(check in 1:length(interims)){
+    check_time <- interims[check]
+    w <- weights[1:check_time, check]
+    if(sum(w)==0){
+      next
+    }
+    y <- df$y[1:check_time]
+    zscore <- sum(w*y) / sqrt(2*sigmasq*sum(w^2))
+    if(zscore > zbound[check]){
+      return(cbind("Increase", check_time))
+    }
   }
+  return(cbind("None", max(df$time)))
+}
+
+# Weighted group-sequential tests with Gaussian outcomes and estimated variance.
+# Supports O'Brien-Fleming and Pocock
+wBatchfrequentistStopZ <- function(df, weights, interims, method, sim_args){
   
-  sprt_calc <- sprt_df %>% filter(time %in% interims) %>%
-    mutate(decision = 1*(loss <= loss_bound)) %>%
-      filter(decision == 0)
+  p.bounds <- 1- pnorm(gsDesign(k = length(interims) + 1, test.type = 1, 
+                                alpha = sim_args$alpha,
+                                sfu = method)$upper$bound)
   
-  stop_time <- ifelse(nrow(sprt_calc)==0, max(sprt_df$time), sprt_calc$time[1])
-  stop_postmean <- ifelse(nrow(sprt_calc)==0, h0, 
-                          sprt_calc$post_mean[1])
-  stop_type <- ifelse(stop_postmean==h0, "None", 
-                      ifelse(stop_postmean > h0, "Increase", "Decrease"))
-  
-  return(cbind(stop_type, stop_time))
+  for(i in 1:length(interims)){
+    
+    # Weighted t-test
+    
+    df_interim <- df %>% filter(time <= interims[i])
+    w_interim <- weights[1:nrow(df_interim), i]
+    
+    wt_n <- sum(w_interim)
+    wt_df <- 2*wt_n - 2
+    
+    y1_mean <- wtd.mean(df_interim$outcome[df_interim$treatment==1], weights = w_interim[df_interim$treatment==1], normwt=FALSE)
+    y0_mean <- wtd.mean(df_interim$outcome[df_interim$treatment==0], weights = w_interim[df_interim$treatment==0], normwt=FALSE)
+    
+    y1_var <- var(df_interim$outcome[df_interim$treatment==1])
+    y0_var <- var(df_interim$outcome[df_interim$treatment==0])
+    pooled.sd <- sqrt(y1_var / sum(w_interim[df_interim$treatment==1]) + y0_var / sum(w_interim[df_interim$treatment==0]))
+    
+    t.stat <- (y1_mean - y0_mean) / pooled.sd
+    p.val <- pnorm(t.stat, lower.tail=FALSE)
+    
+    if(p.val < p.bounds[i]){
+      return(cbind("Increase", interims[i]))
+    }
+  }
+  return(cbind("None", max(df$time)))
+}
+
+# Weighted Bayesian estimation-based stopping test for Gaussian outcomes
+bayesian <- function(df, weights, interims, h0, tausq, sigmasq, loss_bound, sim_args){
+  for(check in 1:length(interims)){
+    check_time <- interims[check]
+    w <- weights[1:check_time, check]
+    y <- df$y[1:check_time]
+    
+    wy <- w*y 
+    wsum <- sum(w)
+    wymean <- sum(wy) / sum(w)
+    
+    post_mean <- (h0*2*sigmasq + wsum*tausq*wymean) / (wsum*tausq + 2*sigmasq)
+    post_var <- (2*sigmasq*tausq)/(wsum*tausq + 2*sigmasq)
+    
+    loss <- bayesloss(post_mean, sqrt(post_var))
+    
+    if(loss > loss_bound){
+      if(post_mean > h0){
+        return(cbind("Increase", check_time))
+      }
+    }
+  }
+  return(cbind("None", max(df$time)))
 }
 
 bayesloss <- function(mu, sigma){
   -(sigma/sqrt(2*pi))*exp(-mu^2/(2*sigma^2)) + mu*pnorm(-mu/sigma)
 }
 
-# Wrapper for standard group sequential testing 
+# Unweighted group-sequential tests with TTE outcomes.
+# Supports O'Brien-Fleming and Pocock
 gsTTE <- function(df, interims, method, metric, sim_args){
   
   if(interims[length(interims)]==sim_args$Maxtime){gsk = length(interims)} else{gsk = length(interims)+1}
@@ -343,7 +481,8 @@ gsTTE <- function(df, interims, method, metric, sim_args){
   return(c("None", sim_args$Maxtime))
 }
 
-# Wrapper for group sequential testing with weights
+# Weighted group-sequential tests with TTE outcomes.
+# Supports O'Brien-Fleming and Pocock
 wgsTTE <- function(df, interims, wmethod, cutoff, nfolds, method, metric, sim_args){
   
   if(interims[length(interims)]==sim_args$Maxtime){gsk = length(interims)} else{gsk = length(interims)+1}
@@ -384,39 +523,6 @@ wgsTTE <- function(df, interims, wmethod, cutoff, nfolds, method, metric, sim_ar
     }
   }
   return(c("None", sim_args$Maxtime))
-}
-
-# Calculate weights for TTE data
-estWTTE <- function(df, cutoff, est_time, nfolds, sim_args, nthreads){
-  
-  ncolX <- sim_args$ncolX
-  
-  df_est <- df[est_time > df$accrual,]
-  df_est$outcome <- pmin(df_est$outcome, est_time-df_est$accrual)
-  df_est$noncensored <- df_est$noncensored * (df_est$outcome < est_time-df_est$accrual)
-  
-  folds <- sample(cut(seq(1,nrow(df_est)),breaks=nfolds,labels=FALSE))
-  
-  w <- rep(NA, nrow(df_est))
-  
-  for(f in 1:nfolds){
-    train_ids <- which(folds!=f)
-    pred_ids <- which(folds==f)
-    X <- df_est[train_ids,] %>% select(paste0("X", seq(1,ncolX))) %>% as.matrix()
-    csf <- causal_survival_forest(X=X, 
-                                  Y=df_est$outcome[train_ids],
-                                  W=df_est$treatment[train_ids],
-                                  D=df_est$noncensored[train_ids],
-                                  W.hat = rep(0.5, nrow(X)), 
-                                  horizon = est_time-6, # heuristic to stop instability
-                                  target = "RMST", 
-                                  num.threads = nthreads)
-    
-    Xn <- df_est[pred_ids,] %>% select(paste0("X", seq(1,ncolX))) %>% as.matrix()
-    pred <- predict(csf, Xn, estimate.variance = TRUE, num.threads = nthreads)
-    w[pred_ids] <- 1 - pnorm((cutoff-pred$predictions) / sqrt(pred$variance.estimates))
-  }
-  return(w)
 }
 
 # Implementation of SUBTLE (Yu et al 2021)
