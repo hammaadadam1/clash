@@ -15,7 +15,7 @@ The results will be stored in `experiments/gaussian/results`. Running this line 
   sbatch gaussian.slurm
   ```
  
-Finally, `experiments/gaussian/plot_gaussian.R` uses the generated results to create the plots from the Paper. Running this file interactively (through RStudio) will produce Figures 2, 3, S7, S8, and S9. 
+Finally, `experiments/gaussian/plot_gaussian.R` uses the generated results to create the plots from the Paper. Running this file interactively (through RStudio) will produce Figures 2, 3, S6, S7, S8, and S9. 
   
 ### TTE Outcomes
 
@@ -30,7 +30,7 @@ The results will be stored in `experiments/tte/results`. Running this line of co
   sbatch tte.slurm
   ```
  
-Finally, `experiments/gaussian/plot_tte.R` uses the generated results to create the plots from the Paper. Running this file interactively (through RStudio) will produce Figures S10, S11, and S12.
+Finally, `experiments/gaussian/plot_tte.R` uses the generated results to create the plots from the Paper. Running this file interactively (through RStudio) will produce Figures S16, S17, and S18.
   
  ### Real-world Application
   
