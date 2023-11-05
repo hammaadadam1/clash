@@ -4,7 +4,7 @@ This repository contains replication code for the experiments described in *Shou
 
 ### Example for Practitioners
 
-`example.R` provides a simple example of running CLASH with interim data from a randomized experiment. If you are interested in using CLASH for your study, this is a great starting point.
+`example.R` demonstrates how to run CLASH with interim data from a randomized experiment. If you are interested in using CLASH for your study, this is a great starting point.
 
 ### Gaussian Outcomes
 
