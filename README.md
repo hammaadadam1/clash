@@ -2,6 +2,10 @@
 
 This repository contains replication code for the experiments described in *Should I Stop or Should I Go: Early Stopping with Heterogeneous Populations* (NeurIPS, 2023). All experiments were run using R version 4.2.2.
 
+### Example for Practitioners
+
+`example.R` provides a simple example of running CLASH with interim data from a randomized experiment. If you are interested in using CLASH for your study, this is a great starting point.
+
 ### Gaussian Outcomes
 
 The files contained in the `experiments/gaussian` folder run the simulation experiments with Gaussian outcomes (as in Figures 2-3). To run one replication of the experiment (i.e., all considered simulation settings with a single random seed), navigate to the `experiments/gaussian` folder and run the following line of code from the command line (replacing `seed` with the desired random seed):
